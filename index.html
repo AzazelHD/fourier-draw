@@ -13,8 +13,28 @@
           <label class="theme-switch" for="theme-toggle" aria-label="Toggle theme">
             <input type="checkbox" id="theme-toggle" checked />
             <span class="theme-slider" aria-hidden="true">
-              <span class="theme-icon moon">🌙</span>
-              <span class="theme-icon sun">☀️</span>
+              <span class="theme-icon moon">
+                <svg class="theme-icon-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="theme-icon sun">
+                <svg class="theme-icon-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8" />
+                  <path
+                    d="M12 2.8V5.1M12 18.9v2.3M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M2.8 12h2.3M18.9 12h2.3M5.5 18.5l1.6-1.6M16.9 7.1l1.6-1.6"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
             </span>
           </label>
         </fieldset>
@@ -38,13 +58,13 @@
         </fieldset>
 
         <fieldset class="animation-controls" aria-label="Animation controls">
-          <label for="terms-range">Freqs</label>
-          <input id="terms-range" type="range" min="3" max="80" step="1" value="10" />
-          <output id="terms-value" for="terms-range">10</output>
+          <label for="terms-range">Harmonics</label>
+          <input id="terms-range" type="range" />
+          <output id="terms-value" for="terms-range"></output>
 
           <label for="speed-range">Speed</label>
-          <input id="speed-range" type="range" min="1" max="10" step="1" value="3" />
-          <output id="speed-value" for="speed-range">3</output>
+          <input id="speed-range" type="range" />
+          <output id="speed-value" for="speed-range"></output>
 
           <button type="button" id="pause-btn" aria-pressed="false">Pause</button>
           <button type="button" id="reset-trace-btn">Reset</button>

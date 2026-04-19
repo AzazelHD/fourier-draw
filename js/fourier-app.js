@@ -3,12 +3,20 @@ import {
   EDGE_BASE_GAP,
   EDGE_EXTRA_GAP,
   FRAME_PADDING,
+  HARMONICS_UI_DEFAULT,
+  HARMONICS_UI_MAX,
+  HARMONICS_UI_MIN,
+  HARMONICS_UI_STEP,
   MAX_LEFT_MARGIN_RATIO,
   MAX_SVG_SIZE_BYTES,
   MAX_TOP_MARGIN_RATIO,
   MIN_LEFT_MARGIN,
   MIN_TOP_MARGIN,
   SAMPLE_COUNT,
+  SPEED_UI_DEFAULT,
+  SPEED_UI_MAX,
+  SPEED_UI_MIN,
+  SPEED_UI_STEP,
   STAR_SVG,
   STORAGE_THEME_KEY,
   TRAIL_RATIO,
@@ -64,8 +72,8 @@ export class FourierApp {
       xSeries: [],
       ySeries: [],
       trace: [],
-      visibleTerms: Number(this.controls.termsRange.value),
-      speed: mapUiSpeedToInternal(Number(this.controls.speedRange.value)),
+      visibleTerms: HARMONICS_UI_DEFAULT,
+      speed: mapUiSpeedToInternal(SPEED_UI_DEFAULT),
       isPaused: false,
       phase: 0,
       lastTimestamp: 0,
@@ -89,13 +97,30 @@ export class FourierApp {
   }
 
   init() {
+    this.initializeControlDefaults();
     const storedTheme = localStorage.getItem(STORAGE_THEME_KEY);
     this.setTheme(storedTheme || "dark");
-    this.controls.speedValue.value = String(Number(this.controls.speedRange.value));
     this.bindUI();
     this.initCanvasSizeHandling();
     this.loadDefaultStar();
     requestAnimationFrame(this.animationLoop);
+  }
+
+  initializeControlDefaults() {
+    this.controls.termsRange.min = String(HARMONICS_UI_MIN);
+    this.controls.termsRange.max = String(HARMONICS_UI_MAX);
+    this.controls.termsRange.step = String(HARMONICS_UI_STEP);
+    this.controls.termsRange.value = String(HARMONICS_UI_DEFAULT);
+    this.controls.termsValue.value = String(HARMONICS_UI_DEFAULT);
+
+    this.controls.speedRange.min = String(SPEED_UI_MIN);
+    this.controls.speedRange.max = String(SPEED_UI_MAX);
+    this.controls.speedRange.step = String(SPEED_UI_STEP);
+    this.controls.speedRange.value = String(SPEED_UI_DEFAULT);
+    this.controls.speedValue.value = String(SPEED_UI_DEFAULT);
+
+    this.state.visibleTerms = HARMONICS_UI_DEFAULT;
+    this.state.speed = mapUiSpeedToInternal(SPEED_UI_DEFAULT);
   }
 
   setStatus(message) {
