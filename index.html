@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fourier Epicycles</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-theme="dark">
+    <header>
+      <form id="top" aria-label="Fourier controls">
+        <fieldset aria-label="Theme controls">
+          <label class="theme-switch" for="theme-toggle" aria-label="Toggle theme">
+            <input type="checkbox" id="theme-toggle" checked />
+            <span class="theme-slider" aria-hidden="true">
+              <span class="theme-icon moon">🌙</span>
+              <span class="theme-icon sun">☀️</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <fieldset class="input-controls" aria-label="Input controls">
+          <label>
+            <input type="radio" name="source-mode" value="upload" checked />
+            SVG
+          </label>
+          <label>
+            <input type="radio" name="source-mode" value="draw" />
+            Draw
+          </label>
+          <label for="svg-file">File</label>
+          <input type="file" id="svg-file" accept=".svg,image/svg+xml" />
+          <button type="button" id="sample-star-btn">Sample star</button>
+          <button type="button" id="accept-draw-btn" class="draw-only" hidden disabled>
+            Accept
+          </button>
+          <button type="button" id="clear-draw-btn" class="draw-only" hidden disabled>Clear</button>
+        </fieldset>
+
+        <fieldset class="animation-controls" aria-label="Animation controls">
+          <label for="terms-range">Freqs</label>
+          <input id="terms-range" type="range" min="3" max="80" step="1" value="10" />
+          <output id="terms-value" for="terms-range">10</output>
+
+          <label for="speed-range">Speed</label>
+          <input id="speed-range" type="range" min="1" max="10" step="1" value="3" />
+          <output id="speed-value" for="speed-range">3</output>
+
+          <button type="button" id="pause-btn" aria-pressed="false">Pause</button>
+          <button type="button" id="reset-trace-btn">Reset</button>
+        </fieldset>
+
+        <output id="status" role="status" aria-live="polite"></output>
+      </form>
+    </header>
+
+    <main>
+      <section>
+        <figure>
+          <canvas id="fourier-canvas" aria-label="Canvas with Fourier epicycles"></canvas>
+        </figure>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
