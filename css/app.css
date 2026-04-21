@@ -12,6 +12,8 @@
   --draw-soft: rgba(255, 255, 255, 0.2);
   --draw-mid: rgba(255, 255, 255, 0.65);
   --draw-guide: rgba(255, 255, 255, 0.35);
+  --draw-reference: rgba(111, 184, 255, 0.46);
+  --draw-bridge-debug: #ff4d4d;
   --draw-line: #ffffff;
 }
 
@@ -29,6 +31,8 @@ body[data-theme="light"] {
   --draw-soft: rgba(10, 14, 20, 0.22);
   --draw-mid: rgba(10, 14, 20, 0.72);
   --draw-guide: rgba(10, 14, 20, 0.4);
+  --draw-reference: rgba(21, 88, 169, 0.5);
+  --draw-bridge-debug: #d83a3a;
   --draw-line: #0b0e13;
 }
 

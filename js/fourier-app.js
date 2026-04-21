@@ -7,19 +7,18 @@ import {
   HARMONICS_UI_MAX,
   HARMONICS_UI_MIN,
   HARMONICS_UI_STEP,
+  MAX_IMAGE_SIZE_BYTES,
   MAX_LEFT_MARGIN_RATIO,
   MAX_SVG_SIZE_BYTES,
   MAX_TOP_MARGIN_RATIO,
   MIN_LEFT_MARGIN,
   MIN_TOP_MARGIN,
-  SAMPLE_COUNT,
   SPEED_UI_DEFAULT,
   SPEED_UI_MAX,
   SPEED_UI_MIN,
   SPEED_UI_STEP,
   STAR_SVG,
   STORAGE_THEME_KEY,
-  TRAIL_RATIO,
 } from "./config.js";
 import {
   computeFourierSeries,
@@ -27,10 +26,10 @@ import {
   getDominantRadius,
   getSafeScale,
   mapUiSpeedToInternal,
-  normalizePoints,
   parseSvgPoints,
   resamplePolyline,
 } from "./fourier-utils.js";
+import { extractContourFromRaster } from "./image-processing.js";
 
 export class FourierApp {
   constructor(documentRef) {
@@ -41,7 +40,7 @@ export class FourierApp {
     this.controls = {
       themeToggle: documentRef.getElementById("theme-toggle"),
       sourceModeInputs: documentRef.querySelectorAll('input[name="source-mode"]'),
-      svgFileInput: documentRef.getElementById("svg-file"),
+      fileInput: documentRef.getElementById("image-file"),
       sampleStarButton: documentRef.getElementById("sample-star-btn"),
       acceptDrawButton: documentRef.getElementById("accept-draw-btn"),
       clearDrawButton: documentRef.getElementById("clear-draw-btn"),
@@ -69,6 +68,11 @@ export class FourierApp {
     this.state = {
       sourceMode: "upload",
       normalizedPoints: [],
+      referenceContours: [],
+      pointDrawMask: [],
+      showBridgeDebug: false,
+      referencePathLength: 0,
+      currentPathLength: 0,
       xSeries: [],
       ySeries: [],
       trace: [],
@@ -86,6 +90,8 @@ export class FourierApp {
       soft: "rgba(255, 255, 255, 0.2)",
       mid: "rgba(255, 255, 255, 0.65)",
       guide: "rgba(255, 255, 255, 0.35)",
+      reference: "rgba(102, 183, 255, 0.4)",
+      bridgeDebug: "#ff3b3b",
       line: "#ffffff",
     };
 
@@ -94,6 +100,7 @@ export class FourierApp {
     this.handlePointerMove = this.handlePointerMove.bind(this);
     this.handlePointerUp = this.handlePointerUp.bind(this);
     this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.handleKeydown = this.handleKeydown.bind(this);
   }
 
   init() {
@@ -133,6 +140,10 @@ export class FourierApp {
     this.colors.mid = styles.getPropertyValue("--draw-mid").trim() || this.colors.mid;
     this.colors.guide = styles.getPropertyValue("--draw-guide").trim() || this.colors.guide;
     this.colors.line = styles.getPropertyValue("--draw-line").trim() || this.colors.line;
+    this.colors.reference =
+      styles.getPropertyValue("--draw-reference").trim() || this.colors.reference;
+    this.colors.bridgeDebug =
+      styles.getPropertyValue("--draw-bridge-debug").trim() || this.colors.bridgeDebug;
   }
 
   setTheme(theme) {
@@ -186,7 +197,13 @@ export class FourierApp {
     };
     this.layout.drawScale =
       Math.min(this.layout.drawWidth, this.layout.drawHeight) * DRAW_SCALE_FACTOR;
-    this.layout.topCenterY = Math.round(topMargin / 2);
+    const headerEl = this.document.querySelector("header");
+    const headerBottomPx = headerEl ? headerEl.getBoundingClientRect().bottom : 0;
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const canvasScaleY = canvasRect.height > 0 ? this.canvas.height / canvasRect.height : 1;
+    const headerOffsetCanvas = Math.ceil(headerBottomPx * canvasScaleY) + 10;
+
+    this.layout.topCenterY = Math.max(headerOffsetCanvas, Math.round(topMargin / 2));
     this.layout.leftCenterX = Math.round(leftMargin / 2);
   }
 
@@ -197,14 +214,95 @@ export class FourierApp {
     return { x, y };
   }
 
-  buildSeriesFromPoints(points, message) {
-    const normalized = normalizePoints(points);
+  computePathLength(points, isClosed = true) {
+    if (!points || points.length < 2) {
+      return 0;
+    }
+
+    let total = 0;
+    for (let index = 1; index < points.length; index += 1) {
+      total += Math.hypot(
+        points[index].x - points[index - 1].x,
+        points[index].y - points[index - 1].y,
+      );
+    }
+
+    if (isClosed) {
+      const first = points[0];
+      const last = points[points.length - 1];
+      total += Math.hypot(first.x - last.x, first.y - last.y);
+    }
+
+    return total;
+  }
+
+  computeNormalizationTransform(points) {
+    if (!points.length) {
+      return null;
+    }
+
+    const center = points.reduce(
+      (accumulator, point) => ({
+        x: accumulator.x + point.x / points.length,
+        y: accumulator.y + point.y / points.length,
+      }),
+      { x: 0, y: 0 },
+    );
+
+    const maxRadius = points.reduce((maximum, point) => {
+      return Math.max(maximum, Math.hypot(point.x - center.x, point.y - center.y));
+    }, 0);
+
+    if (maxRadius < 1e-6) {
+      return null;
+    }
+
+    return { center, maxRadius };
+  }
+
+  normalizeWithTransform(points, transform) {
+    return points.map((point) => ({
+      x: (point.x - transform.center.x) / transform.maxRadius,
+      y: (point.y - transform.center.y) / transform.maxRadius,
+    }));
+  }
+
+  buildSeriesFromPoints(points, message, options = {}) {
+    const isClosed = options.isClosed ?? true;
+    const setAsSpeedReference = options.setAsSpeedReference ?? false;
+    const transform = this.computeNormalizationTransform(points);
+    if (!transform) {
+      this.setStatus("Not enough points to compute Fourier.");
+      return;
+    }
+
+    const normalized = this.normalizeWithTransform(points, transform);
     if (normalized.length < 10) {
       this.setStatus("Not enough points to compute Fourier.");
       return;
     }
 
     this.state.normalizedPoints = normalized;
+    const sourceReferenceContours =
+      Array.isArray(options.referenceContours) && options.referenceContours.length
+        ? options.referenceContours
+        : [{ points, isClosed }];
+    this.state.referenceContours = sourceReferenceContours
+      .filter((contour) => Array.isArray(contour.points) && contour.points.length >= 2)
+      .map((contour) => ({
+        isClosed: Boolean(contour.isClosed),
+        points: this.normalizeWithTransform(contour.points, transform),
+      }));
+
+    this.state.pointDrawMask =
+      Array.isArray(options.drawMask) && options.drawMask.length === normalized.length
+        ? options.drawMask.map((value) => Boolean(value))
+        : new Array(normalized.length).fill(true);
+
+    this.state.currentPathLength = this.computePathLength(normalized, isClosed);
+    if (setAsSpeedReference || this.state.referencePathLength <= 0) {
+      this.state.referencePathLength = Math.max(1e-6, this.state.currentPathLength);
+    }
     this.state.xSeries = computeFourierSeries(normalized.map((point) => point.x));
     this.state.ySeries = computeFourierSeries(normalized.map((point) => point.y));
     this.recalcLayout();
@@ -214,8 +312,53 @@ export class FourierApp {
   }
 
   loadDefaultStar() {
-    const sampled = parseSvgPoints(STAR_SVG, SAMPLE_COUNT);
-    this.buildSeriesFromPoints(sampled, "");
+    const initial = parseSvgPoints(STAR_SVG);
+    const sampleCount = Math.max(10, Math.round(initial.points.length * 0.9));
+    const sampled = parseSvgPoints(STAR_SVG, sampleCount);
+    this.buildSeriesFromPoints(sampled.points, "", {
+      isClosed: sampled.isClosed,
+      setAsSpeedReference: true,
+      drawMask: sampled.drawMask,
+      referenceContours: sampled.referenceContours,
+    });
+  }
+
+  drawReferenceContour(scale) {
+    if (!this.state.referenceContours.length) {
+      return;
+    }
+
+    this.context.save();
+    this.context.strokeStyle = this.colors.reference;
+    this.context.lineWidth = 1.6;
+    this.context.lineCap = "round";
+    this.context.lineJoin = "round";
+    this.context.setLineDash([5, 4]);
+    for (const contour of this.state.referenceContours) {
+      if (contour.points.length < 2) {
+        continue;
+      }
+      this.context.beginPath();
+      const first = contour.points[0];
+      this.context.moveTo(
+        this.layout.drawCenter.x + first.x * scale,
+        this.layout.drawCenter.y + first.y * scale,
+      );
+
+      for (let index = 1; index < contour.points.length; index += 1) {
+        const point = contour.points[index];
+        this.context.lineTo(
+          this.layout.drawCenter.x + point.x * scale,
+          this.layout.drawCenter.y + point.y * scale,
+        );
+      }
+
+      if (contour.isClosed) {
+        this.context.closePath();
+      }
+      this.context.stroke();
+    }
+    this.context.restore();
   }
 
   drawTopEpicycles(state, scale) {
@@ -304,17 +447,61 @@ export class FourierApp {
     this.context.lineWidth = 2.1;
     this.context.lineCap = "round";
     this.context.lineJoin = "round";
-    const fadeZone = 0.12;
+    this.context.globalAlpha = 1;
+    this.context.strokeStyle = this.colors.line;
+    this.context.beginPath();
+
+    let hasDrawnSegment = false;
+    let hasDebugBridgeSegment = false;
+    let openSubpath = false;
+
+    if (this.state.showBridgeDebug) {
+      this.context.strokeStyle = this.colors.line;
+    }
 
     for (let index = 1; index < this.state.trace.length; index += 1) {
-      const age = (this.state.phase - this.state.trace[index].phase + 1) % 1;
-      const t = 1 - age / TRAIL_RATIO;
-      this.context.globalAlpha = Math.min(1, t / fadeZone) * 0.95;
+      const previous = this.state.trace[index - 1];
+      const current = this.state.trace[index];
+      const shouldDraw = previous.penDown && current.penDown;
+
+      if (shouldDraw) {
+        if (!openSubpath) {
+          this.context.moveTo(previous.x, previous.y);
+          openSubpath = true;
+        }
+        this.context.lineTo(current.x, current.y);
+        hasDrawnSegment = true;
+      } else {
+        if (this.state.showBridgeDebug) {
+          this.context.save();
+          this.context.strokeStyle = this.colors.bridgeDebug;
+          this.context.lineWidth = 1.8;
+          this.context.beginPath();
+          this.context.moveTo(previous.x, previous.y);
+          this.context.lineTo(current.x, current.y);
+          this.context.stroke();
+          this.context.restore();
+          hasDebugBridgeSegment = true;
+        }
+        openSubpath = false;
+      }
+    }
+
+    if (hasDrawnSegment) {
       this.context.strokeStyle = this.colors.line;
-      this.context.beginPath();
-      this.context.moveTo(this.state.trace[index - 1].x, this.state.trace[index - 1].y);
-      this.context.lineTo(this.state.trace[index].x, this.state.trace[index].y);
       this.context.stroke();
+    }
+
+    if (this.state.showBridgeDebug && hasDebugBridgeSegment) {
+      this.context.save();
+      const point = this.state.trace[this.state.trace.length - 1];
+      if (!point.penDown) {
+        this.context.fillStyle = this.colors.bridgeDebug;
+        this.context.beginPath();
+        this.context.arc(point.x, point.y, 2.8, 0, Math.PI * 2);
+        this.context.fill();
+      }
+      this.context.restore();
     }
 
     this.context.restore();
@@ -380,19 +567,18 @@ export class FourierApp {
     const currentPoint = {
       x: this.layout.drawCenter.x + xState.endpoint.x * safeScale,
       y: this.layout.drawCenter.y + yState.endpoint.x * safeScale,
-      phase: this.state.phase,
+      penDown:
+        this.state.pointDrawMask[
+          Math.min(
+            this.state.pointDrawMask.length - 1,
+            Math.floor(this.state.phase * this.state.pointDrawMask.length),
+          )
+        ] ?? true,
     };
 
     this.state.trace.push(currentPoint);
-    while (this.state.trace.length > 1) {
-      const age = (this.state.phase - this.state.trace[0].phase + 1) % 1;
-      if (age > TRAIL_RATIO) {
-        this.state.trace.shift();
-      } else {
-        break;
-      }
-    }
 
+    this.drawReferenceContour(safeScale);
     this.drawTopEpicycles(xState, safeScale);
     this.drawLeftEpicycles(yState, safeScale);
     this.drawGuides(topTip, leftTip, currentPoint);
@@ -414,7 +600,18 @@ export class FourierApp {
       this.state.xSeries.length &&
       this.state.ySeries.length
     ) {
-      this.state.phase = (this.state.phase + deltaSeconds * this.state.speed) % 1;
+      const previousPhase = this.state.phase;
+      const speedLengthScale =
+        this.state.currentPathLength > 1e-6 && this.state.referencePathLength > 1e-6
+          ? this.state.referencePathLength / this.state.currentPathLength
+          : 1;
+      const clampedScale = Math.max(0.15, Math.min(3, speedLengthScale));
+      const nextPhase = (this.state.phase + deltaSeconds * this.state.speed * clampedScale) % 1;
+      const wrapped = nextPhase < previousPhase;
+      this.state.phase = nextPhase;
+      if (wrapped) {
+        this.state.trace = [];
+      }
     }
 
     this.context.clearRect(0, 0, this.layout.width, this.layout.height);
@@ -436,6 +633,9 @@ export class FourierApp {
 
   resetSeries() {
     this.state.normalizedPoints = [];
+    this.state.referenceContours = [];
+    this.state.pointDrawMask = [];
+    this.state.currentPathLength = 0;
     this.state.xSeries = [];
     this.state.ySeries = [];
     this.state.trace = [];
@@ -445,7 +645,7 @@ export class FourierApp {
     this.state.sourceMode = mode;
     const drawMode = mode === "draw";
 
-    this.controls.svgFileInput.disabled = drawMode;
+    this.controls.fileInput.disabled = drawMode;
     this.controls.sampleStarButton.disabled = drawMode;
     this.controls.acceptDrawButton.hidden = !drawMode;
     this.controls.clearDrawButton.hidden = !drawMode;
@@ -458,13 +658,13 @@ export class FourierApp {
       this.resetSeries();
       this.resetPendingDrawing();
       this.controls.acceptDrawButton.disabled = true;
-      this.setStatus("Draw mode active. Canvas is blank. Draw with your mouse.");
+      this.setStatus("");
       return;
     }
 
     this.resetPendingDrawing();
     this.controls.acceptDrawButton.disabled = true;
-    this.setStatus("SVG mode active.");
+    this.setStatus("");
   }
 
   handlePointerDown(event) {
@@ -512,41 +712,67 @@ export class FourierApp {
       return;
     }
 
+    const sampleCount = Math.max(10, Math.round(this.state.drawPoints.length * 0.9));
     this.state.pendingDrawSampledPoints = resamplePolyline(
       this.state.drawPoints,
-      SAMPLE_COUNT,
-      true,
+      sampleCount,
+      false,
     );
     this.controls.acceptDrawButton.disabled = this.state.pendingDrawSampledPoints.length === 0;
 
     if (this.state.pendingDrawSampledPoints.length > 0) {
-      this.setStatus("Drawing ready. Click Accept.");
+      this.setStatus("");
     }
   }
 
-  async handleSvgUpload(file) {
+  async handleFileUpload(file) {
     if (!file) {
       return;
     }
 
-    if (file.type !== "image/svg+xml" && !file.name.toLowerCase().endsWith(".svg")) {
-      this.setStatus("Invalid file. Please select an SVG.");
-      this.controls.svgFileInput.value = "";
-      return;
-    }
+    const isSvg = file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg");
+    const isImage = file.type.startsWith("image/");
 
-    if (file.size > MAX_SVG_SIZE_BYTES) {
-      this.setStatus("SVG is larger than 2 MB. Use a smaller file.");
-      this.controls.svgFileInput.value = "";
+    if (!isSvg && !isImage) {
+      this.setStatus("Unsupported file. Use an image (SVG, PNG, JPG, etc.).");
+      this.controls.fileInput.value = "";
       return;
     }
 
     try {
-      const text = await file.text();
-      const sampled = parseSvgPoints(text, SAMPLE_COUNT);
-      this.buildSeriesFromPoints(sampled, `SVG loaded: ${file.name}`);
+      if (isSvg) {
+        if (file.size > MAX_SVG_SIZE_BYTES) {
+          this.setStatus("SVG is larger than 2 MB. Use a smaller file.");
+          this.controls.fileInput.value = "";
+          return;
+        }
+        const text = await file.text();
+        const initial = parseSvgPoints(text);
+        const sampleCount = Math.max(10, Math.round(initial.points.length * 0.9));
+        const sampled = parseSvgPoints(text, sampleCount);
+        this.buildSeriesFromPoints(sampled.points, "", {
+          isClosed: sampled.isClosed,
+          drawMask: sampled.drawMask,
+          referenceContours: sampled.referenceContours,
+        });
+      } else {
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+          this.setStatus("Image is larger than 10 MB. Use a smaller file.");
+          this.controls.fileInput.value = "";
+          return;
+        }
+        this.setStatus("Detecting edges\u2026");
+        const sampled = await extractContourFromRaster(file);
+        const sampleCount = Math.max(10, Math.round(sampled.points.length * 0.9));
+        const resampled = resamplePolyline(sampled.points, sampleCount, sampled.isClosed);
+        this.buildSeriesFromPoints(resampled, "", {
+          isClosed: sampled.isClosed,
+          drawMask: sampled.drawMask,
+          referenceContours: sampled.referenceContours,
+        });
+      }
     } catch (error) {
-      this.setStatus(error instanceof Error ? error.message : "Could not read SVG.");
+      this.setStatus(error instanceof Error ? error.message : "Could not process file.");
     }
   }
 
@@ -576,7 +802,7 @@ export class FourierApp {
     this.resetPendingDrawing();
     this.resetSeries();
     this.controls.acceptDrawButton.disabled = true;
-    this.setStatus("Canvas cleared. Draw a new shape.");
+    this.setStatus("");
   }
 
   handleAcceptDrawing() {
@@ -584,7 +810,9 @@ export class FourierApp {
       return;
     }
 
-    this.buildSeriesFromPoints(this.state.pendingDrawSampledPoints, "");
+    this.buildSeriesFromPoints(this.state.pendingDrawSampledPoints, "", {
+      isClosed: false,
+    });
     this.controls.acceptDrawButton.disabled = true;
     this.state.drawPoints = [];
   }
@@ -610,11 +838,28 @@ export class FourierApp {
   handleTraceReset() {
     this.state.trace = [];
     this.state.phase = 0;
-    this.setStatus("Trace reset.");
+    this.setStatus("");
+  }
+
+  handleKeydown(event) {
+    if (!event.altKey || event.repeat) {
+      return;
+    }
+
+    if (event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      this.state.showBridgeDebug = !this.state.showBridgeDebug;
+      this.setStatus(
+        this.state.showBridgeDebug
+          ? "Bridge debug ON (red = pen-up bridge travel)."
+          : "Bridge debug OFF.",
+      );
+    }
   }
 
   bindUI() {
     this.document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    this.document.addEventListener("keydown", this.handleKeydown);
     this.controls.themeToggle.addEventListener("change", () => this.handleThemeToggle());
     this.controls.sourceModeInputs.forEach((input) => {
       input.addEventListener("change", () => {
@@ -623,9 +868,9 @@ export class FourierApp {
         }
       });
     });
-    this.controls.svgFileInput.addEventListener("change", (event) => {
+    this.controls.fileInput.addEventListener("change", (event) => {
       const file = event.target.files?.[0];
-      this.handleSvgUpload(file);
+      this.handleFileUpload(file);
     });
     this.controls.sampleStarButton.addEventListener("click", () => this.handleSampleStar());
     this.controls.clearDrawButton.addEventListener("click", () => this.handleClearDrawing());
