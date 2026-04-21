@@ -89,6 +89,8 @@ fieldset {
   border: 1px solid var(--panel-border);
   border-radius: 0.5rem;
   padding: 0.45rem 0.5rem;
+  min-height: 2.8rem;
+  height: 2.8rem;
   background: color-mix(in srgb, var(--panel) 90%, transparent);
   backdrop-filter: blur(8px);
   display: flex;
@@ -96,6 +98,7 @@ fieldset {
   gap: 0.35rem;
   align-items: center;
   justify-content: flex-start;
+  align-content: center;
 }
 
 .input-controls,
@@ -114,12 +117,25 @@ fieldset {
 label,
 output,
 button,
+select,
 input {
   font: inherit;
   color: var(--ink);
 }
 
+label,
+output,
 button,
+select,
+input[type="file"] {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+button,
+select,
 input[type="file"],
 input[type="range"] {
   border: 1px solid var(--control-border);
@@ -130,6 +146,22 @@ input[type="range"] {
 button {
   padding: 0.28rem 0.5rem;
   cursor: pointer;
+}
+
+select {
+  padding: 0.23rem 0.38rem;
+}
+
+input[type="file"] {
+  min-height: 1.95rem;
+}
+
+#sample-shape-select {
+  width: 10ch;
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #theme-toggle {
@@ -300,6 +332,7 @@ canvas {
 
   fieldset {
     width: 100%;
+    height: auto;
     flex-wrap: wrap;
   }
 }

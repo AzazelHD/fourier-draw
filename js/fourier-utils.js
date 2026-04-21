@@ -476,7 +476,7 @@ function buildSegmentsFromContours(orderedContours) {
       }
     }
 
-    const nextContour = orderedContours[(contourIndex + 1) % orderedContours.length];
+    const nextContour = orderedContours[contourIndex + 1];
     if (!nextContour || nextContour.points.length === 0) {
       continue;
     }
@@ -762,7 +762,7 @@ export function parseSvgPoints(svgText, sampleCount) {
 
   return {
     points: finalPoints,
-    isClosed: true,
+    isClosed: false,
     drawMask,
     referenceContours: orderedContours,
   };

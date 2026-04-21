@@ -50,7 +50,12 @@
           </label>
           <label for="image-file">File</label>
           <input type="file" id="image-file" accept="image/*,.svg" />
-          <button type="button" id="sample-star-btn">Sample star</button>
+          <label for="sample-shape-select">Sample</label>
+          <select id="sample-shape-select" aria-label="Sample shape">
+            <option value="star">Star</option>
+            <option value="one-piece-flag">One Piece flag</option>
+          </select>
+          <button type="button" id="sample-star-btn">Load sample</button>
           <button type="button" id="accept-draw-btn" class="draw-only" hidden disabled>
             Accept
           </button>

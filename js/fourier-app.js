@@ -41,6 +41,7 @@ export class FourierApp {
       themeToggle: documentRef.getElementById("theme-toggle"),
       sourceModeInputs: documentRef.querySelectorAll('input[name="source-mode"]'),
       fileInput: documentRef.getElementById("image-file"),
+      sampleShapeSelect: documentRef.getElementById("sample-shape-select"),
       sampleStarButton: documentRef.getElementById("sample-star-btn"),
       acceptDrawButton: documentRef.getElementById("accept-draw-btn"),
       clearDrawButton: documentRef.getElementById("clear-draw-btn"),
@@ -320,6 +321,27 @@ export class FourierApp {
       setAsSpeedReference: true,
       drawMask: sampled.drawMask,
       referenceContours: sampled.referenceContours,
+    });
+  }
+
+  async loadSampleByKey(sampleKey) {
+    let svgText = STAR_SVG;
+    if (sampleKey === "one-piece-flag") {
+      const response = await fetch("./one_piece_flag.svg", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Could not load One Piece flag sample.");
+      }
+      svgText = await response.text();
+    }
+
+    const initial = parseSvgPoints(svgText);
+    const sampleCount = Math.max(10, Math.round(initial.points.length * 0.9));
+    const sampled = parseSvgPoints(svgText, sampleCount);
+    this.buildSeriesFromPoints(sampled.points, "", {
+      isClosed: sampled.isClosed,
+      drawMask: sampled.drawMask,
+      referenceContours: sampled.referenceContours,
+      setAsSpeedReference: sampleKey === "star",
     });
   }
 
@@ -646,6 +668,7 @@ export class FourierApp {
     const drawMode = mode === "draw";
 
     this.controls.fileInput.disabled = drawMode;
+    this.controls.sampleShapeSelect.disabled = drawMode;
     this.controls.sampleStarButton.disabled = drawMode;
     this.controls.acceptDrawButton.hidden = !drawMode;
     this.controls.clearDrawButton.hidden = !drawMode;
@@ -785,13 +808,19 @@ export class FourierApp {
     this.setTheme(nextTheme);
   }
 
-  handleSampleStar() {
+  async handleSampleStar() {
     this.switchSourceMode("upload");
     const uploadRadio = this.document.querySelector('input[name="source-mode"][value="upload"]');
     if (uploadRadio) {
       uploadRadio.checked = true;
     }
-    this.loadDefaultStar();
+
+    const selectedSample = this.controls.sampleShapeSelect?.value || "star";
+    try {
+      await this.loadSampleByKey(selectedSample);
+    } catch (error) {
+      this.setStatus(error instanceof Error ? error.message : "Could not load sample shape.");
+    }
   }
 
   handleClearDrawing() {
@@ -872,7 +901,9 @@ export class FourierApp {
       const file = event.target.files?.[0];
       this.handleFileUpload(file);
     });
-    this.controls.sampleStarButton.addEventListener("click", () => this.handleSampleStar());
+    this.controls.sampleStarButton.addEventListener("click", () => {
+      this.handleSampleStar();
+    });
     this.controls.clearDrawButton.addEventListener("click", () => this.handleClearDrawing());
     this.controls.acceptDrawButton.addEventListener("click", () => this.handleAcceptDrawing());
     this.controls.termsRange.addEventListener("input", () => this.handleTermsChange());
