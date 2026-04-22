@@ -119,6 +119,9 @@ export class FourierApp {
     this.controls.termsRange.max = String(HARMONICS_UI_MAX);
     this.controls.termsRange.step = String(HARMONICS_UI_STEP);
     this.controls.termsRange.value = String(HARMONICS_UI_DEFAULT);
+    this.controls.termsValue.min = String(HARMONICS_UI_MIN);
+    this.controls.termsValue.max = String(HARMONICS_UI_MAX);
+    this.controls.termsValue.step = String(HARMONICS_UI_STEP);
     this.controls.termsValue.value = String(HARMONICS_UI_DEFAULT);
 
     this.controls.speedRange.min = String(SPEED_UI_MIN);
@@ -853,6 +856,28 @@ export class FourierApp {
     this.state.trace = [];
   }
 
+  handleTermsValueChange() {
+    const typedValue = Number(this.controls.termsValue.value);
+    if (!Number.isFinite(typedValue)) {
+      this.controls.termsValue.value = String(this.state.visibleTerms);
+      return;
+    }
+
+    const clampedValue = Math.min(HARMONICS_UI_MAX, Math.max(HARMONICS_UI_MIN, typedValue));
+    const nextValue = Math.round(clampedValue / HARMONICS_UI_STEP) * HARMONICS_UI_STEP;
+
+    this.controls.termsRange.value = String(nextValue);
+    this.controls.termsValue.value = String(nextValue);
+
+    if (nextValue === this.state.visibleTerms) {
+      return;
+    }
+
+    this.state.visibleTerms = nextValue;
+    this.recalcLayout();
+    this.state.trace = [];
+  }
+
   handleSpeedChange() {
     this.state.speed = mapUiSpeedToInternal(Number(this.controls.speedRange.value));
     this.controls.speedValue.value = String(Number(this.controls.speedRange.value));
@@ -907,6 +932,15 @@ export class FourierApp {
     this.controls.clearDrawButton.addEventListener("click", () => this.handleClearDrawing());
     this.controls.acceptDrawButton.addEventListener("click", () => this.handleAcceptDrawing());
     this.controls.termsRange.addEventListener("input", () => this.handleTermsChange());
+    this.controls.termsValue.addEventListener("change", () => this.handleTermsValueChange());
+    this.controls.termsValue.addEventListener("blur", () => this.handleTermsValueChange());
+    this.controls.termsValue.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.handleTermsValueChange();
+        this.controls.termsValue.blur();
+      }
+    });
     this.controls.speedRange.addEventListener("input", () => this.handleSpeedChange());
     this.controls.pauseButton.addEventListener("click", () => this.handlePauseToggle());
     this.controls.resetTraceButton.addEventListener("click", () => this.handleTraceReset());

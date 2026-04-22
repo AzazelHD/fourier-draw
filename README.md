@@ -73,9 +73,3 @@ Then open:
 - js/fourier-utils.js: Fourier math, SVG parsing, resampling
 - js/image-processing.js: raster edge detection and contour extraction
 - js/config.js: constants and defaults
-
-## Why a local server is recommended
-
-SVG loading for built-in samples uses fetch, which is more reliable over http://localhost than opening the file directly with file://.
-
-## License
