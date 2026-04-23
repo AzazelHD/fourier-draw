@@ -324,6 +324,7 @@ canvas {
   border-radius: 0;
   background: var(--canvas-bg);
   border: none;
+  touch-action: none;
 }
 
 @media (max-width: 980px) {
@@ -339,6 +340,111 @@ canvas {
   fieldset {
     width: 100%;
     height: auto;
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Controls toggle (hidden on desktop) ─────────────────────── */
+#controls-toggle-btn {
+  display: none;
+}
+
+/* ── Mobile layout ≤ 600px ───────────────────────────────────── */
+@media (max-width: 600px) {
+  /* Restore fixed header so the canvas fills the full viewport */
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0.35rem 0.4rem;
+    z-index: 10;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  /* Show toggle button on mobile */
+  #controls-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    min-height: 2.4rem;
+    font-size: 1.1rem;
+    padding: 0 0.45rem;
+    flex-shrink: 0;
+  }
+
+  /* Collapsed state: hide all fieldsets and status */
+  #top:not(.expanded) .input-controls,
+  #top:not(.expanded) .animation-controls,
+  #top:not(.expanded) #status {
+    display: none;
+  }
+
+  /* Expanded state: stack fieldsets vertically */
+  #top.expanded {
+    flex-direction: column;
+    align-items: stretch;
+    max-height: calc(100dvh - 0.7rem);
+    overflow-y: auto;
+    gap: 0.35rem;
+  }
+
+  #top.expanded fieldset {
+    width: 100%;
+    height: auto;
+    flex-wrap: wrap;
+  }
+
+  /* The theme toggle fieldset stays in the same row as the controls button */
+  fieldset[aria-label="Theme controls"] {
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  #top.expanded fieldset[aria-label="Theme controls"] {
+    margin-left: 0;
+  }
+
+  /* Wrap the first row (toggle + theme) nicely */
+  #top {
+    flex-wrap: wrap;
+  }
+
+  /* Bigger touch targets */
+  button,
+  select {
+    min-height: 2.5rem;
+  }
+
+  input[type="file"] {
+    min-height: 2.5rem;
+    max-width: 100%;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    min-height: 2rem;
+  }
+
+  input[type="number"] {
+    min-height: 2.5rem;
+  }
+
+  #terms-value {
+    width: 5.2rem;
+  }
+
+  #sample-shape-select {
+    max-width: 100%;
+    width: auto;
+  }
+
+  /* Make the input-controls and animation-controls wrap nicely */
+  .input-controls,
+  .animation-controls {
     flex-wrap: wrap;
   }
 }

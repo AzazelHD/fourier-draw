@@ -25,10 +25,8 @@ import {
   evaluateSeries,
   getDominantRadius,
   getSafeScale,
-  mapUiSpeedToInternal,
-  parseSvgPoints,
-  resamplePolyline,
-} from "./fourier-utils.js";
+} from "./fourier-math.js";
+import { mapUiSpeedToInternal, parseSvgPoints, resamplePolyline } from "./fourier-utils.js";
 import { extractContourFromRaster } from "./image-processing.js";
 
 export class FourierApp {
@@ -52,6 +50,7 @@ export class FourierApp {
       pauseButton: documentRef.getElementById("pause-btn"),
       resetTraceButton: documentRef.getElementById("reset-trace-btn"),
       statusOutput: documentRef.getElementById("status"),
+      controlsToggleButton: documentRef.getElementById("controls-toggle-btn"),
     };
     this.layout = {
       width: 0,
@@ -102,6 +101,7 @@ export class FourierApp {
     this.handlePointerUp = this.handlePointerUp.bind(this);
     this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
     this.handleKeydown = this.handleKeydown.bind(this);
+    this.handleControlsToggle = this.handleControlsToggle.bind(this);
   }
 
   init() {
@@ -895,6 +895,27 @@ export class FourierApp {
     this.setStatus("");
   }
 
+  handleControlsToggle() {
+    const form = this.document.getElementById("top");
+    const isExpanded = form.classList.toggle("expanded");
+    if (this.controls.controlsToggleButton) {
+      this.controls.controlsToggleButton.setAttribute("aria-expanded", String(isExpanded));
+    }
+    // Recalc layout so the drawing area accounts for the new header height
+    this.recalcLayout();
+  }
+
+  collapseControlsPanel() {
+    const form = this.document.getElementById("top");
+    if (form.classList.contains("expanded")) {
+      form.classList.remove("expanded");
+      if (this.controls.controlsToggleButton) {
+        this.controls.controlsToggleButton.setAttribute("aria-expanded", "false");
+      }
+      this.recalcLayout();
+    }
+  }
+
   handleKeydown(event) {
     if (!event.altKey || event.repeat) {
       return;
@@ -915,10 +936,18 @@ export class FourierApp {
     this.document.addEventListener("visibilitychange", this.handleVisibilityChange);
     this.document.addEventListener("keydown", this.handleKeydown);
     this.controls.themeToggle.addEventListener("change", () => this.handleThemeToggle());
+    if (this.controls.controlsToggleButton) {
+      this.controls.controlsToggleButton.addEventListener("click", this.handleControlsToggle);
+    }
     this.controls.sourceModeInputs.forEach((input) => {
       input.addEventListener("change", () => {
         if (input.checked) {
           this.switchSourceMode(input.value);
+          // On mobile, collapse the controls panel when switching to draw mode
+          // so the full canvas is available for drawing
+          if (input.value === "draw") {
+            this.collapseControlsPanel();
+          }
         }
       });
     });

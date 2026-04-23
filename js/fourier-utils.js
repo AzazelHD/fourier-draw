@@ -1,80 +1,9 @@
-import {
-  EDGE_BASE_GAP,
-  SPEED_INTERNAL_MAX,
-  SPEED_INTERNAL_MIN,
-  SPEED_UI_MAX,
-  SPEED_UI_MIN,
-} from "./config.js";
+import { SPEED_INTERNAL_MAX, SPEED_INTERNAL_MIN, SPEED_UI_MAX, SPEED_UI_MIN } from "./config.js";
 
 export function mapUiSpeedToInternal(uiValue) {
   const clamped = Math.min(SPEED_UI_MAX, Math.max(SPEED_UI_MIN, uiValue));
   const ratio = (clamped - SPEED_UI_MIN) / (SPEED_UI_MAX - SPEED_UI_MIN);
   return SPEED_INTERNAL_MIN + ratio * (SPEED_INTERNAL_MAX - SPEED_INTERNAL_MIN);
-}
-
-export function getDominantRadius(series, limit) {
-  if (!series.length) {
-    return 0.58;
-  }
-
-  const terms = series.slice(0, Math.max(1, limit));
-  const main = terms[0]?.amplitude ?? 0;
-  const next = terms[1]?.amplitude ?? 0;
-  return main + next * 0.5;
-}
-
-export function computeFourierSeries(values) {
-  const sampleSize = values.length;
-  const coefficients = [];
-
-  for (let frequency = 0; frequency < sampleSize; frequency += 1) {
-    let real = 0;
-    let imaginary = 0;
-
-    for (let index = 0; index < sampleSize; index += 1) {
-      const angle = (2 * Math.PI * frequency * index) / sampleSize;
-      real += values[index] * Math.cos(angle);
-      imaginary -= values[index] * Math.sin(angle);
-    }
-
-    real /= sampleSize;
-    imaginary /= sampleSize;
-
-    const signedFrequency = frequency <= sampleSize / 2 ? frequency : frequency - sampleSize;
-    coefficients.push({
-      frequency: signedFrequency,
-      amplitude: Math.hypot(real, imaginary),
-      phase: Math.atan2(imaginary, real),
-    });
-  }
-
-  return coefficients.sort((left, right) => right.amplitude - left.amplitude);
-}
-
-export function evaluateSeries(coefficients, angle, limit) {
-  let currentX = 0;
-  let currentY = 0;
-  const circles = [];
-  const terms = coefficients.slice(0, limit);
-
-  for (const term of terms) {
-    const previousX = currentX;
-    const previousY = currentY;
-    currentX += term.amplitude * Math.cos(term.frequency * angle + term.phase);
-    currentY += term.amplitude * Math.sin(term.frequency * angle + term.phase);
-    circles.push({
-      startX: previousX,
-      startY: previousY,
-      endX: currentX,
-      endY: currentY,
-      radius: term.amplitude,
-    });
-  }
-
-  return {
-    circles,
-    endpoint: { x: currentX, y: currentY },
-  };
 }
 
 export function normalizePoints(points) {
@@ -766,22 +695,4 @@ export function parseSvgPoints(svgText, sampleCount) {
     drawMask,
     referenceContours: orderedContours,
   };
-}
-
-export function getSafeScale(layout, xSeries, ySeries, visibleTerms, drawScale) {
-  if (!xSeries.length || !ySeries.length) {
-    return drawScale;
-  }
-
-  const xDominantRadius = getDominantRadius(xSeries, visibleTerms);
-  const yDominantRadius = getDominantRadius(ySeries, visibleTerms);
-  const dominantRadius = Math.max(xDominantRadius, yDominantRadius);
-
-  if (dominantRadius <= 0) {
-    return drawScale;
-  }
-
-  const topFitScale = Math.max(4, layout.topCenterY - EDGE_BASE_GAP) / xDominantRadius;
-  const leftFitScale = Math.max(4, layout.leftCenterX - EDGE_BASE_GAP) / yDominantRadius;
-  return Math.min(drawScale, topFitScale, leftFitScale);
 }
